@@ -37,6 +37,12 @@ else
     throwSNRError = false;
 end
 
+if isfield(model, 'SNRErrorLimit')
+    SNRErrorLimit = model.SNRErrorLimit;
+else
+    SNRErrorLimit = [];
+end
+
 if length(varargin) == 2
     if strcmp(varargin{1}, 'gradcheck')
         assert(islogical(varargin{2}));
@@ -48,7 +54,11 @@ if length(varargin) == 2
             d=norm(deltaf - gradient)/norm(gradient + deltaf); %%
             d1=norm(deltaf - gradient,1)/norm(gradient + deltaf,1); %%
             fprintf(1,' Norm1 difference: %d\n Norm2 difference: %d\n',d1,d);
-            grChek = {delta, d, d1};
+            grChek.delta = delta;
+            grChek.gradient = gradient;
+            grChek.deltaf = deltaf;
+            grChek.normDiff0 = d;
+            grChek.normDiff1 = d1;
         else
             grChek = [];
         end
@@ -93,5 +103,5 @@ if iters > 0
     model = hsvargplvmExpandParam(model, params);
     
     % Check SNR of optimised model
-    hsvargplvmCheckSNR(hsvargplvmShowSNR(model), [], [], throwSNRError);
+    hsvargplvmCheckSNR(hsvargplvmShowSNR(model), SNRErrorLimit, [], throwSNRError);
 end

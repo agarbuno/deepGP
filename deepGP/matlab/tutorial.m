@@ -38,6 +38,11 @@ pause
 clear; close all
 demToyUnsupervised; % Call to the demo
 
+fprintf(1, '\n\nWe can print the model with ''hsvargplvmDisplay(model)''.\n');
+fprintf('Press any key to display model:\n')
+pause
+hsvargplvmDisplay(model)
+
 fprintf('\n\n');
 
 
@@ -67,46 +72,48 @@ fprintf(1,['', ...
  'Here we set a large number of iterations for the deep GPs, since their convergence\n', ...
  'is much slower (the other baselines are run until convergence). But you can still\n', ...
  'get reasonable results even by reducing a lot the number of iterations\n', ...
- 'with initVardist and itNo, e.g. itNo = [5000 2000]; (or even less)\n']);
+ 'with initVardist and itNo, e.g. itNo = [5000 2000]; (or even less).\n', ...
+ '\n', ...
+ 'NOTE!!! For a quicker regression demo check: demToyRegressionSimple.m\n']);
  
 fprintf('\n# Press any key to start demo...\n')
 pause
 clear; close all
 pause(1)
-dFile = ['demoRegression1.txt']; % Diary file
-delete(dFile); diary(dFile)
+
 % File which stores the results
-fName = ['demoRegressionErrors.txt'];
-% Warped  GPs with temporal constraints
-runVGPDS=0;
+fName = './RESULT_demoRegressionErrors.txt';
+
 % Initialise the error vectors
 eGP = []; eGPfitc = []; eRecGP = []; eDeepGP = []; eDeepGPNoCovars = [];
-eDeepGPIn =[]; eRecDeepGP = []; eRecDeepGPNoCovars = []; eVGPDS = [];
-eVGPDSIn = []; eRecVGPDS = []; eMean = []; eLinReg = [];
+eDeepGPIn =[]; eRecDeepGP = []; eRecDeepGPNoCovars = []; eMean = []; eLinReg = [];
 for experimentNo=[1:15];
-	keep('fName', 'experimentNo', 'runVGPDS', 'eMean', 'eLinReg', 'eGP', 'eGPfitc', 'eRecGP', 'eDeepGP', 'eDeepGPNoCovars', 'eDeepGPIn', 'eRecDeepGP', 'eRecDeepGPNoCovars', 'eVGPDS', 'eVGPDSIn', 'eRecVGPDS');
+	keep('fName', 'experimentNo', 'eMean', 'eLinReg', 'eGP', 'eGPfitc', 'eRecGP', 'eDeepGP', 'eDeepGPNoCovars', 'eDeepGPIn', 'eRecDeepGP', 'eRecDeepGPNoCovars');
 	% Different random seed depending on the experiment id
     randn('seed', 6000+experimentNo); rand('seed', 6000+experimentNo);
-    % The kernel to be used in the uppermost level
-	dynamicKern = {'lin','white','bias'};
-    % Number of iterations performed for initialising the variational
-    % distribution, and number of training iterations
-	initVardistIters = 1100;  itNo = [2000 5000 2000 2000 2000 2000 2000 2000 2000];
-	H=2;  % Number of layers
-	initSNR = {100, 100}; % Initial Signal To Noise ration per layer
-    toyType='hierGpsNEW';
-	Ntr=25; Dtoy=10; % Number of training data and dimensionality of outputs
-	K=25; % Number of inducing points to use
-	Q=8; % Dimensionality of latent space (can potentially be different per layer)
-	initX='inputsOutputs'; % Initialise X with X0
-	learnInducing=1; % Learning the inducing points
-	runGP=1; runVGPDS=0;  % Compare with GPs and/or VGPD
-	errorInRun = 0; % Flag
+    errorInRun = 0; % Flag
 	try  
 		demToyRegression; % Run the main demo
 	catch e
-		errorInRun = 1;
-		fprintf(1, ['Error in experimentNo = ' num2str(experimentNo)])
+        if strcmp(e.identifier, 'hsvagplvm:checkSNR:lowSNR')
+            % If the previous optimisation resulted in low SNR and threw
+            % an error, try again but this time initialise the variational
+            % distribution for longer and with higher SNR.
+            fprintf(1, ['\n\n### Low SNR in experimentNo = ' num2str(experimentNo) ' !! Trying again...\n\n'])
+            keep('fName', 'experimentNo', 'eMean', 'eLinReg', 'eGP', 'eGPfitc', 'eRecGP', 'eDeepGP', 'eDeepGPNoCovars', 'eDeepGPIn', 'eRecDeepGP', 'eRecDeepGPNoCovars');
+            randn('seed', 6000+experimentNo); rand('seed', 6000+experimentNo);
+            initVardistIters = [2100 1600 1600];  itNo = [2000 repmat(1000, 1,13)];
+            initSNR = {150, 350};
+            errorInRun = 0; % Flag
+            try
+                demToyRegression
+            catch e
+                % If for a second time there's a problem with SNR, give up.
+                errorInRun = 1; fprintf(1, ['Error in experimentNo = ' num2str(experimentNo) ': ' e.message])
+            end
+        else
+            errorInRun = 1; fprintf(1, ['Error in experimentNo = ' num2str(experimentNo) ': ' e.message])
+        end
 	end
 	if ~errorInRun
         % Print on screen and in a file the diagnostics and errors
@@ -122,17 +129,11 @@ for experimentNo=[1:15];
 		eDeepGPIn = [eDeepGPIn errorDeepGPIn]; fprintf(ff, 'errorDeepGPIn = ['); fprintf(ff, '%.4f ', eDeepGPIn); fprintf(ff,'];\n');
 		eRecDeepGP = [eRecDeepGP errorRecDeepGP]; fprintf(ff, 'errorRecDeepGP = ['); fprintf(ff, '%.4f ', eRecDeepGP); fprintf(ff,'];\n');
 		eRecDeepGPNoCovars = [eRecDeepGPNoCovars errorRecDeepGPNoCovars]; fprintf(ff, 'errorRecDeepGPNoCovars = ['); fprintf(ff, '%.4f ', eRecDeepGPNoCovars); fprintf(ff,'];\n');
-		if runVGPDS
-			eVGPDS = [eVGPDS errorVGPDS]; fprintf(ff, 'errorVGPDS = ['); fprintf(ff, '%.4f ', eVGPDS); fprintf(ff,'];\n');
-			eVGPDSIn = [eVGPDSIn errorVGPDSIn]; fprintf(ff, 'errorVGPDSIn = ['); fprintf(ff, '%.4f ', eVGPDSIn); fprintf(ff,'];\n');
-			eRecVGPDS = [eRecVGPDS errorRecVGPDS]; fprintf(ff, 'errorRecVGPDS = ['); fprintf(ff, '%.4f ', eRecVGPDS); fprintf(ff,'];\n');
-		end
 		fclose(ff);
 	end
 end
-diary off
 
-%%% Plots
+% Plots
 fprintf('\n\n');
 tt = 1:length(eMean);
 plotFields = {'eMean','eLinReg','eGP', 'eGPfitc', 'eDeepGP'};
@@ -144,6 +145,30 @@ end
 legend(plotFields);
 
 fprintf('\n\n');
+
+%%  CLASSIFICATION Demo
+fprintf(1,['', ...
+ '#####  Classification demo: ####\n', ...
+ 'This demo shows classification using deep GPs.\n', ...
+ 'There are many ways to do classification in deep GPs:\n', ...
+ 'a) Data are given as inputs on the top level, labels are given\n', ...
+ '   as outputs on the bottom level. This is similar to the regression setting.\n', ...
+ '   The drawback is that what we would really want to do, is to have a\n', ...
+ '   more appropriate likelihood in the bottom layer (e.g. sigmoid).\n', ...
+ 'b) MRD-style: one modality is the data, the other is the class-labels.\n', ...
+ '   Then the latent space in the top layer is learned to separate the classes.\n', ...
+ '   See the related MRD (Manifold Relevance Determination) demo in the\n', ...
+ '   vargplvm package (which is a dependency for the present one). You can\n', ...
+ '   form a deep-style MRD and infer the labels for new data points by\n', ...
+ '   conditioning on the deep latent space.\n', ...
+ 'In this demo we take approach a).\n']);
+ 
+fprintf('\n# Press any key to start demo...\n')
+pause
+clear; close all
+pause(1)
+
+demHsvargplvmClassification
 
 
 %% --------  Collection of demos on digit data (demonstration) ----------------------%

@@ -11,8 +11,9 @@ startVal = 0;
 endVal = 0;
 for h=1:model.H %%% FOR EACH LAYER
     startVal = endVal + 1;
-    
+    dynUsed = false;
     if h==model.H & isfield(model.layer{h}, 'dynamics') & ~isempty(model.layer{h}.dynamics)
+        dynUsed = true;
         endVal = endVal + model.layer{h}.dynamics.nParams;
         model.layer{h}.dynamics = modelExpandParam(model.layer{h}.dynamics, params(startVal:endVal));
     else
@@ -62,9 +63,26 @@ for h=1:model.H %%% FOR EACH LAYER
         model.layer{h}.comp{m}.nParams = endVal - endValPrev;
         totLayerParams = totLayerParams + model.layer{h}.comp{m}.nParams;
     end
-    model.layer{h}.nParams = totLayerParams + model.layer{h}.vardist.nParams;
+    if dynUsed
+        model.layer{h}.nParams =  totLayerParams + model.layer{h}.dynamics.nParams;
+    else
+        model.layer{h}.nParams = totLayerParams + model.layer{h}.vardist.nParams;
+    end
 end
 model.nParams = endVal;
 
 % Force kernel computations etc
 model = hsvargplvmUpdateStats(model);
+
+% Will check SNR in each iteration, to make sure it's OK
+if isfield(model, 'checkSNR') && model.checkSNR > 0
+     snr=hsvargplvmShowSNR(model,[],0);
+     for h=1:model.H
+         [wr,errs] = svargplvmCheckSNR(num2cell(snr{h}),[],[],0,0);
+         for m=1:model.layer{h}.M
+             if ~isempty(wr) || ~isempty(errs)
+                fprintf('# WARNING! Low SNR (%.2f) in layer/modality: %d/%d\n',snr{h}(m),h,m)
+             end
+         end
+     end
+end

@@ -21,7 +21,7 @@
 %    
 % demHsvargplvmRegression.m
 %
-% COPYRIGHT: Andreas Damianou, 2014
+% COPYRIGHT: Andreas Damianou, 2014, 2015
 
 %% -- Loading the data. Replace this with your own data if you want
 [Y, lbls] = vargplvmLoadData('oil100');
@@ -42,6 +42,7 @@ inpX = Y(indTr,:);
 Ytr{1} = lbls(indTr,:);
 
 inpXtest = Y(indTs,:);
+labelsTest = transformLabels(lbls(indTs,:))';
 Ytest{1} = lbls(indTs,:);
 
 %% ---- Configuring the DEEP GP ---
@@ -72,17 +73,34 @@ end
 %% --- RUN THE ACTUAL DEMO
 demHsvargplvmRegression
 
-%% --- INSPECTION
+%% --- INSPECTION: Plot the latent space with colors showing the class
+% labels
 layer = 2; % Change this to plot another layer
-hsvargplvmPlotX(model, layer, [],[], [], [], transformLabels(Ytr{1}));
-
-%% --- PREDICTIONS
+%hsvargplvmPlotX(model, layer, [],[], [], [], transformLabels(Ytr{1})');
+modelP = model.layer{layer}.comp{1};
+modelP.vardist = model.layer{layer}.vardist;
+modelP.X = modelP.vardist.means;
+if layer ~= 1
+    modelP.y = model.layer{layer-1}.vardist.means;
+end
+modelP = vargplvmReduceModel(modelP,2);
+lvmScatterPlot(modelP, Ytr{1});
+%% --- PREDICTIONS for test data0
 [Testmeans Testcovars] = vargplvmPredictPoint(model.layer{end}.dynamics, inpXtest);
 [mu, varsigma] = hsvargplvmPosteriorMeanVarSimple(model, Testmeans, Testcovars);
+
+[~,ind]=max(mu');
+errors=0;
+for i=1:size( Ytest{1},1)
+    errors = errors + (ind(i) ~=  labelsTest(i));
+end
+
 threshold = 0.5;
 mu(mu>0.5) = 1;
 mu(mu<=0.5) = 0;
 figure
 % Errors made
-imagesc(abs(mu - Ytest{1}))
+imagesc(abs(mu - Ytest{1})); colorbar; title('Predictions differences');
+Nstar = size(Ytest{1},1);
 
+fprintf('# Missclassified: %d out of %d (%.2f%% accuracy).\n', errors, Nstar, 100-errors*100/Nstar)
